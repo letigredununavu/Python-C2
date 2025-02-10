@@ -1,6 +1,7 @@
 import argparse
 from tcp_server import TCPServer
 import logger
+from arakis import ArakisCLI
 
 def parse_arguments():
     """Parse command-line arguments"""
@@ -13,6 +14,7 @@ def parse_arguments():
         help="Set the verbosity level (default: info)"
     )
 
+    '''
     parser.add_argument(
         "-i", "--interface",
         default="0.0.0.0",
@@ -25,6 +27,7 @@ def parse_arguments():
         type=int,
         help="Port on which to listen for incoming connections (default: 8888)"
     )
+    '''
 
     return parser.parse_args()
 
@@ -32,10 +35,8 @@ def main():
     args = parse_arguments()
     log = logger.Logger(verbosity=args.verbosity)
     log.info(f"Verbosity level is at : {args.verbosity}")
-    log.info(f"Host is {args.interface} and port is {args.port}")
-    
-    server = TCPServer(args.interface, args.port, 5)
-    server.listen()
+    cmd = ArakisCLI(args.verbosity)
+    cmd.cmdloop()
 
 
 if __name__ == '__main__':
