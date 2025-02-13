@@ -44,7 +44,6 @@ class TCPServer:
 
             while self.running:
                 client_socket, address = self.server.accept()
-                self.counter+=1
                 log.info(f"Accepted connection from {address[0]}:{address[1]}")
 
                 # TODO
