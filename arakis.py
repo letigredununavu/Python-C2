@@ -30,6 +30,11 @@ class ArakisCLI(cmd.Cmd):
         self.log.info(f"Verbosity level set to: {verbosity}")
 
 
+    def emptyline(self):
+        """Override emptyline to prevent repeating the last command."""
+        pass
+
+
     def default(self, line):
         """
         Overrides default cmd behavior to parse hierarchical commands
@@ -298,7 +303,7 @@ class ArakisCLI(cmd.Cmd):
         """
         exit - Exit the CLI
         """
-        self.log.info("Exiting Arakis CLI. May Thy Knife Chip & Shatter!")
+        print("Exiting Arakis CLI. - " + Fore.CYAN + " May Thy Knife Chip & Shatter!" + Style.RESET_ALL)
         return True
             
 """ TODO
@@ -309,7 +314,6 @@ Ajouter un attribut aux sandworm pour dire le dernier moment qu'ils était actif
 
 
 Faire une option pour lister les serveurs
-    - TCP
     - HTTP
 
 

