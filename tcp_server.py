@@ -86,9 +86,9 @@ class TCPServer:
                 client_socket.send(b'ACK')
 
 
-                client_handler = threading.Thread(target=self.handle_client, args=(client_socket,index))
-                client_handler.daemon = True # Ensures threads exit when main program ends
-                client_handler.start()
+                #client_handler = threading.Thread(target=self.handle_client, args=(client_socket,index))
+                #client_handler.daemon = True # Ensures threads exit when main program ends
+                #client_handler.start()
 
         except KeyboardInterrupt:
             log.warning("Server shutting down due to keyboard interrupt.")
@@ -152,20 +152,69 @@ class TCPServer:
         return response_data[6:]
     
 
-    def download_remote_file(self, client_socket, file_info):
+    def get_remote_file_info(self, client_socket, file_path):
+        """
+        Ask the client_socket for the file infos of <file_path>
+        The filename along with the filesize is then returned to the download_remote_file function
+        """
+        try:
+            client_socket.send(f"FILE_INFO {file_path}".encode()+b"\n")
+
+            response_data = client_socket.recv(4096).decode()
+
+            return response_data
+
+        except Exception as e:
+            log.error(f"Error getting remote file ({file_path}) information : {e}")
+            return
+
+
+    def download_remote_file(self, client_socket, file_path):
         """
         Download the specified file from the remote system
 
         TODO : Terminer la fonction de download : sandworm, arakis, ici et client
         """
+
+        """
         try:
+            data = self.get_remote_file_info(client_socket, file_path)
+            filename, filesize = data.split()
+
+
+        except Exception as e:
+            log.error(f"Error getting remote file information : {e}")
+            return False
+        """
+        try:
+            
+            client_socket.send(f"DOWNLOAD {file_path}".encode()+b"\n")
+
+            # On recoit FILE_START, FILENAME, FILESIZE du client
+            file_info = client_socket.recv(4096).decode()
+            print(file_info)
             _, filename, filesize = file_info.split()
-            filename = os.path.basename(filename) # Prevent directory traversal (HOW??)
+
+            client_socket.send("ACK".encode())
+
+            # os.path.basename("/home/user/test.txt") -> test.txt
+            
+            # Prevent directory traversal
+            # En faisant basename, on écrit le fichier test.txt au lieu de /home/user/test.txt
+            # Donc on a plus de contrôle et pas de risque de directory traversal
+            filename = os.path.basename(filename) 
             filesize = int(filesize)
 
-            log.info(f"Receiving file: {filename} ({filesize} bytes)")
+            # TODO : IMPORTANT de changer ca pour prendre en compte windows
+            if not os.path.exists("/tmp/dune"):
+                os.makedirs("/tmp/dune")
 
-            with open(filename, "wb") as file:
+            local_filename = "/tmp/dune/" + filename
+            
+
+            log.info(f"Receiving file: {filename} ({filesize} bytes) and saving it as : {local_filename}")
+
+            with open(local_filename, "wb") as file:
                 received = 0
                 while received < filesize:
                     chunk = client_socket.recv(4096)
@@ -175,11 +224,15 @@ class TCPServer:
                         break
                     file.write(chunk)
                     received += len(chunk)
+                    log.info(f"Received {received}/{filesize} bytes..")
 
             log.info(f"File '{filename}' received successfully.")
 
         except Exception as e:
             log.error(f"Error receiving file: {e}")
+            return False
+        
+        return True
 
 
 

