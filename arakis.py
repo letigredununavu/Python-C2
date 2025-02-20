@@ -1,7 +1,7 @@
 import cmd
 import logger
 import threading
-from tcp_server import TCPServer
+from tcp_server import CustomTCPServer
 from colorama import Fore, Style
 from sandworms import SandwormCLI  # Import the nested CLI
 
@@ -17,7 +17,7 @@ class ArakisCLI(cmd.Cmd):
         super().__init__()
         self.log = logger.Logger(verbosity=verbosity)
         
-        self.tcp_listeners = {} # Indexed by ID, values are a tuple (TCPServer, ID)
+        self.tcp_listeners = {} # Indexed by ID, values are a tuple (CustomTCPServer, ID)
         self.tcp_listeners_count = 0
 
         self.http_servers = {} # Indexed by ID, values are HTTPServer instances
@@ -95,7 +95,7 @@ class ArakisCLI(cmd.Cmd):
         try:
             interface, port = ip, int(port)
             index = self.tcp_listeners_count
-            listener = TCPServer(interface, port, index, self.on_new_sandworm)
+            listener = CustomTCPServer(interface, port, index, self.on_new_sandworm)
 
             
             self.tcp_listeners[index] = (listener,index)

@@ -6,7 +6,7 @@ import os
 log = logger.Logger(verbosity="debug")
 
 
-class TCPServer:
+class CustomTCPServer:
 
     def __init__(self, IP:str, PORT:int, index:int, on_new_sandworm, threads:int = 5):
         """
