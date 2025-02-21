@@ -4,6 +4,7 @@ import threading
 from tcp_server import CustomTCPServer
 from colorama import Fore, Style
 from sandworms import SandwormCLI  # Import the nested CLI
+from custom_http import HTTPHandler, HTTPServerWrapper
 
 class ArakisCLI(cmd.Cmd):
     """
@@ -20,8 +21,8 @@ class ArakisCLI(cmd.Cmd):
         self.tcp_listeners = {} # Indexed by ID, values are a tuple (CustomTCPServer, ID)
         self.tcp_listeners_count = 0
 
-        self.http_servers = {} # Indexed by ID, values are HTTPServer instances
-        self.http_servers_count = 0
+        self.http_listeners = {} # Indexed by ID, values are HTTPServer instances
+        self.http_listeners_count = 0
 
         self.sandworms = {} # Connected clients
         self.current_sandworm = None # Active client session
@@ -116,7 +117,7 @@ class ArakisCLI(cmd.Cmd):
         """
         try:
             index = int(index)
-            listener,_ = self.tcp_listeners.get(index)
+            listener,_ = self.tcp_listeners[index]
             
             if not listener:
                 self.log.error(f"No TCP listener found at index {index}. Use 'list_tcp_listeners")
@@ -177,7 +178,7 @@ class ArakisCLI(cmd.Cmd):
     def tcp_help(self):
         """
         help [command] - Show detailed help for a command.
-        Example: help setup_tcp_listener
+        Example: tcp help
         """
         print("\nAvailable Commands:")
         print("  tcp help                - This help message")
@@ -186,6 +187,98 @@ class ArakisCLI(cmd.Cmd):
         print("  tcp list                - List all TCP listener")
         print("  tcp create <ip> <port>  - Create a new TCP listener")
         print("  exit                    - Exit the CLI\n")
+
+    
+    def http_help(self):
+        """
+        help [command] - Show detailed help for a command.
+        Example: http help
+        """
+        print("\nAvailable Commands:")
+        print("  http help                - http help message")
+        print("  http start <index>       - Start an existing HTTP listener")
+        print("  http remove <id>         - Remove a HTTP listener")
+        print("  http list                - List all HTTP listener")
+        print("  http create <ip> <port>  - Create a new HTTP listener")
+        print("  exit                    - Exit the CLI\n")
+
+
+    def create_http_listener(self, ip, port, secure=False, certfile=None, keyfile=None):
+        """
+        TODO : Pas obligé de spécifier secure si tu donne certfile et keyfile
+        http create <interface> <port> <secure> <certfile> <keyfile> - Setup a listening HTTP server
+        Example: http create 0.0.0.0 8888
+        """
+        try:
+            interface, port = ip, int(port)
+            index = self.http_listeners_count
+
+            http_listener = HTTPServerWrapper(
+                (interface, port),
+                HTTPHandler,
+                secure,
+                certfile,
+                keyfile
+            )
+
+            self.http_listeners[index] = (http_listener, index)
+            self.http_listeners_count+=1
+
+            self.log.info(f"Setting up HTTP listener on {interface}:{port} with index {index}")
+            print(Fore.GREEN + f"[+] Setting up HTTP listener on {interface}:{port} with index {index}." + Style.RESET_ALL)
+
+        except ValueError:
+            self.log.error("Invalide http create arugments.")
+            print(Fore.YELLOW + "[-] Invalid http create arguments" + Style.RESET_ALL)
+
+
+    def start_http_listener(self, index):
+        """
+        http start <index> - Start the http listener indexed <index>
+        Example: http start 1
+        """
+        try:
+            index = int(index)
+            listener,_ = self.http_listeners[index]
+
+            if not listener:
+                self.log.error(f"No HTTP listener found at index {index}.")
+                return
+            
+            self.log.info(f"Starting HTTP listener {index}...")
+            print(Fore.GREEN + f"[+] Starting HTTP listener {index}..." + Style.RESET_ALL)
+            thread = threading.Thread(target=listener.start, daemon=True)
+            thread.start()
+
+        except ValueError:
+            self.log.error("Invalid index.")
+            print(Fore.YELLOW + "[-] Invalid index.")
+
+
+    def remove_http_listener(self, index):
+        """
+        http remove <id> - Remove HTTP listener by id
+        Example : http remove 0
+        """
+        try:
+            index = int(index)
+            listener,_ = self.tcp_listeners[index]
+
+            if not listener:
+                self.log.error(f"No HTTP listener found at index {index}")
+                print(Fore.YELLOW + f"[-] No HTTP listener found at index {index}" + Style.RESET_ALL)
+                return
+            
+            if listener.running:
+                listener.stop()
+
+            del self.http_listeners[index]
+            self.log.warning(f"Removed HTTP listener {index}")
+            print(Fore.GREEN + f"[+] Removed HTTP lsitener {index}" + Style.RESET_ALL)
+
+        except ValueError:
+            self.log.error("Invalid index.")
+
 
     ### SANDWORM COMMANDS ###
     def handle_sandworm_commands(self, sub_cmd, args):
@@ -294,6 +387,11 @@ class ArakisCLI(cmd.Cmd):
             print("  tcp remove <id>         - Remove a TCP listener")
             print("  tcp list                - List all TCP listener")
             print("  tcp create <ip> <port>  - Create a new TCP listener")
+            print("  http help                - http help message")
+            print("  http start <index>       - Start an existing HTTP listener")
+            print("  http remove <id>         - Remove a HTTP listener")
+            print("  http list                - List all HTTP listener")
+            print("  http create <ip> <port>  - Create a new HTTP listener")
             print("  sandworm help           - sandworm help message")
             print("  sandworm list           - list connected sandworms")
             print("  sandworm interact <id>  - interact with specified sandworm")
