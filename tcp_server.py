@@ -8,7 +8,7 @@ log = logger.Logger(verbosity="debug")
 
 class CustomTCPServer:
 
-    def __init__(self, IP:str, PORT:int, index:int, on_new_sandworm, threads:int = 5):
+    def __init__(self, IP:str, PORT:int, index:int, on_new_tcp_sandworm, threads:int = 5):
         """
         Initializing the TCPServer class
 
@@ -28,7 +28,7 @@ class CustomTCPServer:
         self.counter = 0 # Keep track of clients
         self.clients = {} # Dictionary to store connceted Sandworms (clients)
 
-        self.on_new_sandworm = on_new_sandworm # Callback function to signal new client
+        self.on_new_tcp_sandworm = on_new_tcp_sandworm # Callback function to signal new client
 
         log.debug(f"TCPServer initialized for {IP}:{PORT} with capacity {threads}")
 
@@ -77,7 +77,7 @@ class CustomTCPServer:
                 }
 
                 # Notifying ArakisCLI about new connection
-                self.on_new_sandworm(index, hostname, username, client_socket, self.index)
+                self.on_new_tcp_sandworm(index, hostname, username, client_socket, self.index)
 
                 log.info(f"Sandworm [{index}] registered -> Host: {hostname}, User: {username}")
                 

