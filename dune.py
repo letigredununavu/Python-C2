@@ -1,6 +1,6 @@
 import argparse
 import logger
-from arakis import ArakisCLI
+from CLI.arakis import ArakisCLI
 
 def parse_arguments():
     """Parse command-line arguments"""
@@ -19,7 +19,7 @@ def main():
     args = parse_arguments()
     log = logger.Logger(verbosity=args.verbosity)
     cmd = ArakisCLI(args.verbosity)
-    cmd.cmdloop()
+    cmd.run()
 
 
 if __name__ == '__main__':

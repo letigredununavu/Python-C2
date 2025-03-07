@@ -20,7 +20,7 @@ class CustomTCPServer:
         self.IP = IP
         self.PORT = PORT
         self.threads = threads
-        self.index = index
+        self.index = index # index from the arakis dictionnary (different from sandworm index in this class)
         
         self.server = None # will be initialized in listen()
         self.running = False # Flag to control server shutdown
@@ -66,20 +66,20 @@ class CustomTCPServer:
                     continue
 
                 # Adjust class variables
-                index = self.counter
+                sandworm_index = self.counter
                 self.counter += 1
 
                 # Store the client
-                self.clients[index] = {
+                self.clients[sandworm_index] = {
                     "socket": client_socket,
                     "hostname": hostname,
                     "username": username
                 }
 
                 # Notifying ArakisCLI about new connection
-                self.on_new_tcp_sandworm(index, hostname, username, client_socket, self.index)
+                self.on_new_tcp_sandworm(sandworm_index, hostname, username, client_socket, self.index)
 
-                log.info(f"Sandworm [{index}] registered -> Host: {hostname}, User: {username}")
+                log.info(f"Sandworm [{sandworm_index}] registered -> Host: {hostname}, User: {username}")
                 
                 # Send acknowledgment
                 print("Sending ACK..")

